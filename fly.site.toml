@@ -1,0 +1,39 @@
+# Hangar Supply on a public Fly Machine.
+#
+#   fly launch --config fly.site.toml --copy-config --no-deploy
+#   fly deploy --config fly.site.toml
+#
+# Accounts are kept on the volume, so they survive a deploy.
+
+app = "hangar-supply"
+primary_region = "ord"
+
+[processes]
+  app = "node site/server.js"
+
+[env]
+  SITE_DATA_DIR = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[mounts]
+  source = "hangar_data"
+  destination = "/data"
+  initial_size = "1gb"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

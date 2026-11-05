@@ -1,0 +1,27 @@
+{
+  "name": "anchor-sprites-web-ui-api",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Turn any web UI into an API: an agent on a Fly.io Sprite compiles a vendor portal into an Anchor task, a Fly Machine serves it, and it heals when the portal changes",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "site": "node site/server.js",
+    "api": "node api/server.js",
+    "heal": "node heal/server.mjs",
+    "connect": "node integration/connect.mjs",
+    "look": "node integration/look.mjs",
+    "compile": "node integration/compile.mjs",
+    "call": "node integration/call.mjs",
+    "pull": "node integration/pull.mjs",
+    "promote": "node integration/promote.mjs",
+    "test": "node --test site/test/*.test.js integration/*.test.js heal/*.test.js api/*.test.js"
+  },
+  "dependencies": {
+    "anchorbrowser": "^1.0.0",
+    "express": "^5.2.1",
+    "playwright-core": "^1.64.0"
+  }
+}

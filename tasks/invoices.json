@@ -1,0 +1,22 @@
+{
+  "name": "hangar-invoices",
+  "description": "Every invoice on the Hangar Supply vendor portal, as JSON.",
+  "prompt": "The browser is already signed in to the Hangar Supply vendor portal through its profile. Do not sign in or sign up.\n\n1. Open {{portal_url}}/invoices.\n2. The Invoices page has one table with the columns Invoice #, Invoice Date, Due Date, Description, Amount and Status. Read every row of that table.\n3. Return invoices_json: a JSON array with one object per row, newest first, each with:\n   - number: the Invoice # exactly as shown, for example HS-10480\n   - issued: the Invoice Date, which the page shows as MM/DD/YYYY, written as YYYY-MM-DD\n   - due: the Due Date, written as YYYY-MM-DD\n   - description: the Description text\n   - amount: the Amount without the $ sign or commas, with two decimals, for example 4215.50\n   - currency: \"USD\"\n   - status: the Status in lower case: paid, open or overdue\n\nIf the page shows a sign-in form instead of invoices, stop and fail with the message \"signed out\".",
+  "input_schema": [
+    {
+      "name": "portal_url",
+      "type": "string",
+      "required": true,
+      "description": "Base URL of the Hangar Supply portal, with no trailing slash"
+    }
+  ],
+  "output_schema": [
+    {
+      "name": "invoices_json",
+      "type": "string",
+      "description": "JSON array of invoices: number, issued (YYYY-MM-DD), due (YYYY-MM-DD), description, amount (like 1234.50), currency, status (paid | open | overdue)"
+    }
+  ],
+  "taskId": "05c98cf3-f5a5-4865-bc26-e5b6ab767440",
+  "version": "1"
+}
