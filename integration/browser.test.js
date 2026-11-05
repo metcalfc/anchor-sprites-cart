@@ -3,8 +3,9 @@
 //
 // It checks the parts that can only break in a browser: that `connect` and
 // `look` work on both designs, that the spec in tasks/invoices.json describes
-// the classic portal accurately, that the redesign really breaks a flow written
-// for classic, and that the contract can still be met after it.
+// the portal as it is now (the redesign) accurately, that the redesign really
+// breaks a flow written for classic, and that the contract can still be met
+// after it.
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -124,13 +125,21 @@ test('look prints the invoices page as an outline', { skip: !hasChrome }, async 
   assert.match(stdout, /HS-10480/);
 });
 
-test('the spec describes the classic portal: following it meets the contract', { skip: !hasChrome }, async () => {
+test('the classic flow meets the contract on the classic portal', { skip: !hasChrome }, async () => {
+  assert.deepEqual(parseInvoices(await withPage(classicFlow)), expected());
+});
+
+test('the spec describes the redesigned portal: following it meets the contract', { skip: !hasChrome }, async () => {
   const spec = loadSpec();
-  for (const column of ['Invoice #', 'Invoice Date', 'Due Date', 'Description', 'Amount', 'Status']) {
-    assert.ok(spec.prompt.includes(column), `spec names the column ${column}`);
+  for (const text of ['/billing/documents', 'Billing documents', 'Issued', 'Past due', 'Settled']) {
+    assert.ok(spec.prompt.includes(text), `spec mentions ${text}`);
   }
-  const invoices = await withPage(classicFlow);
-  assert.deepEqual(parseInvoices(invoices), expected());
+  await setDesign('new');
+  try {
+    assert.deepEqual(parseInvoices(await withPage(newFlow)), expected());
+  } finally {
+    await setDesign('classic');
+  }
 });
 
 test('the redesign breaks the classic flow, and the contract can still be met', { skip: !hasChrome }, async () => {
