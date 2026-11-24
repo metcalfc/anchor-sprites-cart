@@ -1,0 +1,22 @@
+{
+  "name": "hangar-invoices",
+  "description": "Every invoice on the Hangar Supply vendor portal, as JSON.",
+  "prompt": "The browser is already signed in to the Hangar Supply vendor portal through its profile. Do not sign in or sign up.\n\n1. Open {{portal_url}}/billing/documents. This is the Documents page, reached from the sidebar under Billing > Documents.\n2. The page has a heading \"Documents\" and a list labelled \"Billing documents\". There is no table. Each list item is one invoice and shows: the invoice number (for example HS-10480), the amount as \"USD 1,840.00\", a line \"<description> · Issued 2 Nov 2026 · Due 2 Dec 2026\", and a status badge reading Due, Past due or Settled. Read every item in that list.\n3. Return invoices_json: a JSON array with one object per list item, newest first, each with:\n   - number: the invoice number exactly as shown, for example HS-10480\n   - issued: the date after \"Issued\", which the page shows as D Mon YYYY (for example 2 Nov 2026), written as YYYY-MM-DD (2026-11-02)\n   - due: the date after \"Due\", written as YYYY-MM-DD\n   - description: the description text only, without the Issued and Due parts or the \" · \" separators\n   - amount: the amount without \"USD\", spaces or commas, with two decimals, for example 4215.50\n   - currency: \"USD\"\n   - status: the badge mapped to lower case: Due -> open, Past due -> overdue, Settled -> paid\n\nIf the page shows a sign-in form instead of documents, stop and fail with the message \"signed out\".",
+  "input_schema": [
+    {
+      "name": "portal_url",
+      "type": "string",
+      "required": true,
+      "description": "Base URL of the Hangar Supply portal, with no trailing slash"
+    }
+  ],
+  "output_schema": [
+    {
+      "name": "invoices_json",
+      "type": "string",
+      "description": "JSON array of invoices: number, issued (YYYY-MM-DD), due (YYYY-MM-DD), description, amount (like 1234.50), currency, status (paid | open | overdue)"
+    }
+  ],
+  "taskId": "ccef1473-0332-48a4-9efc-849855b77116",
+  "version": "1"
+}

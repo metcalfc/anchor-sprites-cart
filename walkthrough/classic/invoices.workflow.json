@@ -1,0 +1,69 @@
+{
+  "taskId": "05c98cf3-f5a5-4865-bc26-e5b6ab767440",
+  "version": "1",
+  "isDraft": false,
+  "workflow": {
+    "name": "extract_hangar_supply_invoices",
+    "inputParameters": [
+      {
+        "name": "portal_url",
+        "type": "string",
+        "required": true,
+        "description": "Base URL of the Hangar Supply vendor portal",
+        "defaultValue": null,
+        "options": null
+      }
+    ],
+    "outputParameters": [
+      {
+        "name": "invoices_json",
+        "type": "string",
+        "required": true,
+        "description": "JSON array of invoice records, newest first",
+        "defaultValue": null,
+        "options": null
+      }
+    ],
+    "segments": [
+      {
+        "name": "nav_to_invoices",
+        "type": "ui",
+        "prompt": "Navigate to {{portal_url}}/invoices.",
+        "inputParameters": [
+          {
+            "name": "portal_url",
+            "type": "string",
+            "required": true,
+            "description": "Base URL of the Hangar Supply vendor portal",
+            "defaultValue": null,
+            "options": null
+          }
+        ],
+        "outputParameters": [],
+        "deterministic": "async (page, parameters) => { const baseUrl = String(parameters.portal_url || '').trim().replace(/\\/+$/, ''); const targetUrl = baseUrl.endsWith('/invoices') ? baseUrl : `${baseUrl}/invoices`; await page.goto(targetUrl); return {}; }",
+        "next": "extract_invoices",
+        "router": null
+      },
+      {
+        "name": "extract_invoices",
+        "type": "ui",
+        "prompt": "Inspect the page at {{portal_url}}/invoices. If the page shows a sign-in form instead of invoices, stop and fail with the message \"signed out\". Otherwise, read every row of the Invoices table which has columns: Invoice #, Invoice Date, Due Date, Description, Amount, and Status. Return invoices_json: a JSON array with one object per row, sorted newest first, each with fields:\n- number: the Invoice # exactly as shown (e.g. HS-10480)\n- issued: the Invoice Date written as YYYY-MM-DD (page shows MM/DD/YYYY)\n- due: the Due Date written as YYYY-MM-DD\n- description: the Description text\n- amount: the Amount without the $ sign or commas, with two decimals (e.g. 4215.50)\n- currency: \"USD\"\n- status: the Status in lower case: paid, open or overdue.",
+        "inputParameters": [],
+        "outputParameters": [
+          {
+            "name": "invoices_json",
+            "type": "string",
+            "required": true,
+            "description": "JSON array of invoice records, newest first",
+            "defaultValue": null,
+            "options": null
+          }
+        ],
+        "deterministic": "async (page, parameters) => { const passwordInput = page.locator('input[type=\"password\"], form[action*=\"login\"], form[action*=\"signin\"]').first(); const isPasswordVisible = await passwordInput.isVisible({ timeout: 1500 }).catch(() => false); if (isPasswordVisible) throw new Error(\"signed out\"); const table = page.locator('table').first(); await table.waitFor({ state: 'attached', timeout: 10000 }); await table.scrollIntoViewIfNeeded({ timeout: 500 }).catch(() => {}); const data = await page.evaluate(() => { const isPass = !!document.querySelector('input[type=\"password\"]'); const bodyText = (document.body?.innerText || '').toLowerCase(); if (isPass || (bodyText.includes('sign in') && !document.querySelector('table'))) return { signedOut: true, rows: [] }; const tableEl = document.querySelector('table'); if (!tableEl) return { signedOut: false, rows: null }; const trs = Array.from(tableEl.querySelectorAll('tr')); if (!trs.length) return { signedOut: false, rows: [] }; let headerIdx = -1; const colMap = { number: 0, issued: 1, due: 2, description: 3, amount: 4, status: 5 }; for (let i = 0; i < trs.length; i++) { const cells = Array.from(trs[i].querySelectorAll('th, td')).map(c => (c.innerText || '').trim().toLowerCase()); if (cells.some(c => c.includes('invoice') || c.includes('amount') || c.includes('status'))) { headerIdx = i; cells.forEach((c, idx) => { if (c.includes('invoice #') || (c.includes('invoice') && c.includes('#')) || c === 'invoice' || c === 'invoice #') colMap.number = idx; else if (c.includes('invoice date') || c.includes('issued') || (c.includes('date') && !c.includes('due'))) colMap.issued = idx; else if (c.includes('due date') || c.includes('due')) colMap.due = idx; else if (c.includes('description') || c.includes('desc')) colMap.description = idx; else if (c.includes('amount') || c.includes('total')) colMap.amount = idx; else if (c.includes('status')) colMap.status = idx; }); break; } } const startIdx = headerIdx >= 0 ? headerIdx + 1 : 1; function formatDate(str) { if (!str) return ''; const t = str.trim(); const m1 = t.match(/^(\\d{1,2})[\\/\\-](\\d{1,2})[\\/\\-](\\d{4})$/); if (m1) return `${m1[3]}-${m1[1].padStart(2, '0')}-${m1[2].padStart(2, '0')}`; const m2 = t.match(/^(\\d{4})[\\/\\-](\\d{1,2})[\\/\\-](\\d{1,2})$/); if (m2) return `${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}`; return t; } const items = []; for (let i = startIdx; i < trs.length; i++) { const tds = Array.from(trs[i].querySelectorAll('td')); if (tds.length === 0) continue; const num = (tds[colMap.number]?.innerText || '').trim(); if (!num) continue; const rawIssued = (tds[colMap.issued]?.innerText || '').trim(); const rawDue = (tds[colMap.due]?.innerText || '').trim(); const desc = (tds[colMap.description]?.innerText || '').trim(); const rawAmount = (tds[colMap.amount]?.innerText || '').replace(/[^0-9.-]+/g, ''); const parsedAmount = parseFloat(rawAmount); const amount = isNaN(parsedAmount) ? '' : parsedAmount.toFixed(2); const rawStatus = (tds[colMap.status]?.innerText || '').trim().toLowerCase(); let status = 'open'; if (rawStatus.includes('paid')) status = 'paid'; else if (rawStatus.includes('overdue')) status = 'overdue'; else if (rawStatus.includes('open')) status = 'open'; items.push({ number: num, issued: formatDate(rawIssued), due: formatDate(rawDue), description: desc, amount: amount, currency: 'USD', status: status }); } items.sort((a, b) => (b.issued || '').localeCompare(a.issued || '')); return { signedOut: false, rows: items }; }); if (data.signedOut) throw new Error(\"signed out\"); if (!data.rows) throw new Error(\"Missing required output 'invoices_json' from extract_invoices: table element not found\"); return { invoices_json: JSON.stringify(data.rows) }; }",
+        "next": null,
+        "router": null
+      }
+    ],
+    "startSegmentName": "nav_to_invoices"
+  }
+}

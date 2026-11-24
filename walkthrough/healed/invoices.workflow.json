@@ -1,0 +1,69 @@
+{
+  "taskId": "ccef1473-0332-48a4-9efc-849855b77116",
+  "version": "1",
+  "isDraft": false,
+  "workflow": {
+    "name": "Extract Billing Documents",
+    "inputParameters": [
+      {
+        "name": "portal_url",
+        "type": "string",
+        "required": true,
+        "description": "Base URL of the Hangar Supply vendor portal",
+        "defaultValue": null,
+        "options": null
+      }
+    ],
+    "outputParameters": [
+      {
+        "name": "invoices_json",
+        "type": "string",
+        "required": true,
+        "description": "JSON array string containing invoice details extracted from the Billing documents list",
+        "defaultValue": null,
+        "options": null
+      }
+    ],
+    "segments": [
+      {
+        "name": "nav_to_billing_documents",
+        "type": "ui",
+        "prompt": "Navigate to {{portal_url}}/billing/documents.",
+        "inputParameters": [
+          {
+            "name": "portal_url",
+            "type": "string",
+            "required": true,
+            "description": "Base URL of the Hangar Supply vendor portal",
+            "defaultValue": null,
+            "options": null
+          }
+        ],
+        "outputParameters": [],
+        "deterministic": "async (page, parameters) => { const baseUrl = String(parameters.portal_url || '').replace(/\\/+$/, ''); await page.goto(`${baseUrl}/billing/documents`); return {}; }",
+        "next": "extract_billing_documents",
+        "router": null
+      },
+      {
+        "name": "extract_billing_documents",
+        "type": "ui",
+        "prompt": "Check the page state. If the page shows a sign-in form instead of documents, stop and fail with the error message \"signed out\". Otherwise, on the Documents page with heading \"Documents\", read every item in the list labelled \"Billing documents\". Extract and return invoices_json: a JSON array with one object per list item, newest first, each with: number (e.g. HS-10480), issued (YYYY-MM-DD), due (YYYY-MM-DD), description (without Issued/Due/bullet separators), amount (without USD, spaces, or commas, formatted with two decimals), currency (\"USD\"), and status (Due mapped to \"open\", Past due mapped to \"overdue\", Settled mapped to \"paid\").",
+        "inputParameters": [],
+        "outputParameters": [
+          {
+            "name": "invoices_json",
+            "type": "string",
+            "required": true,
+            "description": "JSON array string containing invoice objects",
+            "defaultValue": null,
+            "options": null
+          }
+        ],
+        "deterministic": "async (page, parameters) => { const isSignIn = await page.locator('input[type=\"password\"], form:has-text(\"Sign in\"), form:has-text(\"Log in\")').first().isVisible().catch(() => false); if (isSignIn) { throw new Error('signed out'); } const heading = page.locator('h1, h2, [role=\"heading\"]').filter({ hasText: /Documents/i }).first(); await heading.waitFor({ state: 'attached', timeout: 10000 }); const months = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' }; const parseDate = (str) => { if (!str) return ''; const m = str.trim().match(/(\\d{1,2})\\s+([A-Za-z]+)\\s+(\\d{4})/); if (!m) return str.trim(); const day = m[1].padStart(2, '0'); const month = months[m[2].slice(0, 3).toLowerCase()] || '01'; const year = m[3]; return `${year}-${month}-${day}`; }; const list = page.locator('[aria-label=\"Billing documents\"], [role=\"list\"][aria-label*=\"Billing documents\"]').first(); let items = list.locator('[role=\"listitem\"], li'); let count = await items.count(); if (count === 0) { items = page.locator('[role=\"listitem\"], li').filter({ hasText: /Issued|Due/ }); count = await items.count(); } if (count === 0) { throw new Error(\"Missing required output 'invoices_json' from extract_billing_documents: No invoice items found\"); } const invoices = []; for (let i = 0; i < count; i++) { const item = items.nth(i); await item.waitFor({ state: 'attached', timeout: 10000 }); const text = (await item.innerText({ timeout: 10000 })).trim(); const numberMatch = text.match(/\\b([A-Z0-9]+-\\d+)\\b/); const invoiceNumber = numberMatch ? numberMatch[1] : ''; const amountMatch = text.match(/USD\\s*([\\d,]+(?:\\.\\d+)?)/i) || text.match(/([\\d,]+\\.\\d{2})/); let amountStr = ''; if (amountMatch) { const num = parseFloat(amountMatch[1].replace(/,/g, '')); amountStr = isNaN(num) ? '' : num.toFixed(2); } const metaMatch = text.match(/(?:^|\\n)(.*?)\\s*[·•]\\s*Issued\\s+([^\\n·•]+?)\\s*[·•]\\s*Due\\s+([^\\n·•]+)/i); let description = ''; let issuedDate = ''; let dueDate = ''; if (metaMatch) { description = metaMatch[1].trim(); issuedDate = parseDate(metaMatch[2]); dueDate = parseDate(metaMatch[3]); } let status = 'open'; if (/past\\s*due/i.test(text)) { status = 'overdue'; } else if (/settled/i.test(text)) { status = 'paid'; } else if (/due/i.test(text)) { status = 'open'; } invoices.push({ number: invoiceNumber, issued: issuedDate, due: dueDate, description: description, amount: amountStr, currency: 'USD', status: status }); } return { invoices_json: JSON.stringify(invoices) }; }",
+        "next": null,
+        "router": null
+      }
+    ],
+    "startSegmentName": "nav_to_billing_documents"
+  }
+}
